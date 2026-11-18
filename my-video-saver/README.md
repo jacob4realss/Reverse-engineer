@@ -60,6 +60,29 @@ Example with a password:
 APP_PASSWORD='choose-something-long' python3 server.py
 ```
 
+## Put it online with Render
+
+Create a **Web Service** from this repository with:
+
+| Setting        | Value                             |
+| -------------- | --------------------------------- |
+| Branch         | the branch that holds this folder |
+| Root Directory | `my-video-saver`                  |
+| Runtime        | Python 3                          |
+| Build Command  | `pip install -r requirements.txt` |
+| Start Command  | `python3 server.py`               |
+| Instance Type  | Free                              |
+
+Environment variables:
+
+| Key            | Value                                   |
+| -------------- | --------------------------------------- |
+| `HOST`         | `0.0.0.0`                               |
+| `APP_PASSWORD` | a long password only you know           |
+
+Render sets `PORT` itself. On the free plan the service sleeps when idle,
+so the first visit after a break takes up to a minute.
+
 ## Safety built in
 
 - Only TikTok links are accepted (`tiktok.com`, `www.`, `m.`, `vm.`, `vt.`),
