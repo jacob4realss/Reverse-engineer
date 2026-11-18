@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Video Saver</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --card: #ffffff;
+    --text: #15171a;
+    --muted: #61656d;
+    --line: #e2e4e8;
+    --accent: #0f766e;
+    --accent-text: #ffffff;
+    --error-bg: #fdecec;
+    --error-text: #9b1c1c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1113;
+      --card: #191c1f;
+      --text: #eceef0;
+      --muted: #9aa0a8;
+      --line: #2a2e33;
+      --accent: #2dd4bf;
+      --accent-text: #062a26;
+      --error-bg: #3a1717;
+      --error-text: #fca5a5;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 560px; margin: 0 auto; padding: 32px 16px 48px; }
+  h1 { font-size: 1.6rem; margin: 0 0 4px; }
+  .lead { color: var(--muted); margin: 0 0 24px; }
+  form { display: grid; gap: 10px; }
+  .row { display: flex; gap: 8px; }
+  input {
+    flex: 1; min-width: 0;
+    padding: 12px 14px;
+    font: inherit; color: var(--text);
+    background: var(--card);
+    border: 1px solid var(--line); border-radius: 10px;
+  }
+  input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  button, .button {
+    display: inline-flex; align-items: center; justify-content: center;
+    padding: 12px 16px;
+    font: inherit; font-weight: 600; text-decoration: none;
+    border-radius: 10px; border: 1px solid var(--line);
+    background: var(--card); color: var(--text); cursor: pointer;
+  }
+  .primary { background: var(--accent); color: var(--accent-text); border-color: transparent; }
+  button:disabled { opacity: .6; cursor: progress; }
+  .hidden { display: none !important; }
+  .error {
+    margin-top: 16px; padding: 12px 14px; border-radius: 10px;
+    background: var(--error-bg); color: var(--error-text);
+  }
+  .card {
+    margin-top: 20px; padding: 16px;
+    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    display: grid; grid-template-columns: 96px 1fr; gap: 14px;
+  }
+  .card img {
+    width: 96px; aspect-ratio: 9 / 16; object-fit: cover;
+    border-radius: 8px; background: var(--line);
+  }
+  .title { font-weight: 600; margin: 0 0 4px; overflow-wrap: anywhere; }
+  .meta { color: var(--muted); font-size: .9rem; margin: 0; }
+  .actions { grid-column: 1 / -1; display: grid; gap: 8px; }
+  .actions small { display: block; font-weight: 400; font-size: .8rem; opacity: .85; }
+  .actions .button { flex-direction: column; }
+  footer { margin-top: 32px; color: var(--muted); font-size: .85rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Video Saver</h1>
+  <p class="lead">Paste a TikTok link to save the video without the watermark.</p>
+
+  <form id="form" autocomplete="off">
+    <div class="row">
+      <input id="url" type="url" inputmode="url" required
+             placeholder="https://www.tiktok.com/@user/video/…" aria-label="TikTok link">
+      <button id="paste" type="button">Paste</button>
+    </div>
+    <input id="key" class="hidden" type="password" placeholder="Password" aria-label="Password">
+    <button id="go" class="primary" type="submit">Find video</button>
+  </form>
+
+  <div id="error" class="error hidden" role="alert"></div>
+
+  <section id="result" class="card hidden" aria-live="polite">
+    <img id="thumb" alt="" referrerpolicy="no-referrer">
+    <div>
+      <p id="title" class="title"></p>
+      <p id="meta" class="meta"></p>
+    </div>
+    <div id="actions" class="actions"></div>
+  </section>
+
+  <footer>
+    For your own videos, or videos you have permission to save.
+    Respect creators' rights and TikTok's terms.
+  </footer>
+</main>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  let passwordRequired = false;
+
+  fetch("/api/config")
+    .then((r) => r.json())
+    .then((cfg) => {
+      passwordRequired = cfg.password_required;
+      $("key").classList.toggle("hidden", !passwordRequired);
+      $("key").required = passwordRequired;
+    })
+    .catch(() => {});
+
+  $("paste").addEventListener("click", async () => {
+    try {
+      $("url").value = (await navigator.clipboard.readText()).trim();
+      $("url").focus();
+    } catch {
+      showError("Your browser didn't allow pasting. Long-press the box and choose Paste.");
+    }
+  });
+
+  function showError(message) {
+    $("error").textContent = message;
+    $("error").classList.remove("hidden");
+  }
+
+  function formatCount(n) {
+    if (n == null) return null;
+    return new Intl.NumberFormat("en", { notation: "compact" }).format(n);
+  }
+
+  function formatDuration(s) {
+    if (!s) return null;
+    return `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;
+  }
+
+  function formatSize(bytes) {
+    return bytes ? `${(bytes / 1048576).toFixed(1)} MB` : "";
+  }
+
+  function params(extra) {
+    const p = new URLSearchParams({ url: $("url").value.trim(), ...extra });
+    if (passwordRequired) p.set("key", $("key").value);
+    return p.toString();
+  }
+
+  // Vertical videos are named by their short side (1080×1920 is "1080p").
+  function resolution(q) {
+    const sides = [q.width, q.height].filter(Boolean);
+    return sides.length ? `${Math.min(...sides)}p` : "";
+  }
+
+  const LABELS = {
+    best: ["Best quality", (q) => `${resolution(q)} · ${formatSize(q.size_bytes)} · may not play on older devices`],
+    compatible: ["Most compatible", (q) => `${resolution(q)} · ${formatSize(q.size_bytes)} · plays everywhere`],
+    audio: ["Sound only", () => "audio file"],
+  };
+
+  $("form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    $("error").classList.add("hidden");
+    $("result").classList.add("hidden");
+    $("go").disabled = true;
+    $("go").textContent = "Looking it up…";
+    try {
+      const response = await fetch(`/api/info?${params({})}`);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Something went wrong.");
+
+      $("thumb").src = data.thumbnail || "";
+      $("title").textContent = data.title || "Untitled video";
+      $("meta").textContent = [
+        data.creator && `@${data.creator}`,
+        formatDuration(data.duration_seconds),
+        data.stats.views != null && `${formatCount(data.stats.views)} views`,
+      ].filter(Boolean).join(" · ");
+
+      const actions = $("actions");
+      actions.replaceChildren();
+      for (const [quality, [label, detail]] of Object.entries(LABELS)) {
+        const q = data.qualities[quality];
+        if (!q) continue;
+        const link = document.createElement("a");
+        link.className = quality === "best" ? "button primary" : "button";
+        link.href = `/api/download?${params({ quality })}`;
+        link.append(label);
+        const small = document.createElement("small");
+        small.textContent = detail(q);
+        link.append(small);
+        actions.append(link);
+      }
+      $("result").classList.remove("hidden");
+    } catch (error) {
+      showError(error.message);
+    } finally {
+      $("go").disabled = false;
+      $("go").textContent = "Find video";
+    }
+  });
+</script>
+</body>
+</html>
